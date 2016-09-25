@@ -1,4 +1,9 @@
 // Can only be run on hook.io
+if (hook.params.secret !== hook.env.CI_SECRET) {
+  hook.res.end("Provide the secret parameter");
+  return;
+}
+
 var id = hook.params.id;
 if (!id) {
   listAllRepos();
