@@ -1,7 +1,24 @@
-require('dotenv').config();
+var hookio = typeof hook !== 'undefined';
 
+if (!hookio) require('dotenv').config();
+
+var env = hookio ? hook.env : process.env;
 var request = require('request');
 var Particle = require('particle-api-js');
+
+function storeRepos(repos) {
+  if (hookio) {
+    hook.datastore.set('ci_repos', repos);
+  }
+}
+
+function showResults(msg) {
+  if (hookio) {
+    hook.res.end(msg);
+  } else {
+    console.log(msg);
+  }
+}
 
 function getRepositories(api, token) {
   return new Promise(function (fulfill, reject) {
@@ -47,8 +64,8 @@ function normalizeState(state) {
 
 function getAllRepos() {
   return Promise.all([
-      getRepositories('api.travis-ci.org', process.env.TRAVIS_ORG_TOKEN),
-      getRepositories('api.travis-ci.com', process.env.TRAVIS_COM_TOKEN)
+      getRepositories('api.travis-ci.org', env.TRAVIS_ORG_TOKEN),
+      getRepositories('api.travis-ci.com', env.TRAVIS_COM_TOKEN)
   ]).then(function (results) {
     var publicRepos = results[0];
     var privateRepos = results[1];
@@ -94,15 +111,15 @@ function encodeAllStates(repos) {
 }
 
 function encodeAndPublish(repos) {
-  console.log(JSON.stringify(repos));
+  storeRepos(repos);
 
   var encoded = encodeAllStates(repos);
 
-  var token = process.env.PARTICLE_TOKEN;
-  var device = process.env.PARTICLE_DEVICE;
+  var token = env.PARTICLE_CI_TOKEN;
+  var device = env.PARTICLE_CI_DEVICE;
   var particle = new Particle();
   return particle.callFunction({ deviceId: device, name: 'build', argument: encoded, auth: token }).then(function () {
-    //console.log("Published build status for " + repos.length + " repos");
+    showResults("Published build status for " + repos.length + " repos");
   });
 }
 
@@ -110,5 +127,5 @@ getAllRepos()
 .then(sortById)
 .then(encodeAndPublish)
 .catch(function (err) {
-  console.error("Error updating build info", err);
+  showResults("Error updating build info\n" + err);
 });

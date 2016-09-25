@@ -1,5 +1,6 @@
 #include "application.h"
 #include "neopixel.h"
+#include "gamma.h"
 
 SYSTEM_MODE(AUTOMATIC);
 
@@ -28,7 +29,6 @@ BuildStatus_e buildStatus[PIXEL_COUNT];
 
 bool allBuildsPass = false;
 
-
 uint8_t hex2dec(char c) {
     if (c >= '0' && c <= '9')
         return c - '0';
@@ -47,7 +47,7 @@ void updateBuildStatus(unsigned system, uint8_t encodedStatus) {
       buildStatus[system] = (BuildStatus_e) encodedStatus;
       break;
     case BUILD_RUNNING:
-      if (buildStatus[system] == BUILD_FAILED) {
+      if (buildStatus[system] == BUILD_FAILED || buildStatus[system] == BUILD_RUNNING_FAILED) {
         buildStatus[system] = BUILD_RUNNING_FAILED;
       } else {
         buildStatus[system] = BUILD_RUNNING_PASS;
@@ -103,6 +103,10 @@ uint32_t colorForRainbow(unsigned i) {
   return Wheel((uint8_t) (i + rainbow >> 2));
 }
 
+uint32_t stripColor(uint8_t r, uint8_t g, uint8_t b) {
+  return strip.Color(CORRECT_GAMMA(r, g, b));
+}
+
 uint32_t colorForBuildStatus(unsigned i, BuildStatus_e st) {
   if (st == BUILD_NONE) {
     return 0;
@@ -113,10 +117,10 @@ uint32_t colorForBuildStatus(unsigned i, BuildStatus_e st) {
   }
 
   switch (st) {
-    case BUILD_PASS: return strip.Color(0, 255, 0);
-    case BUILD_FAILED: return strip.Color(255, 0, 0);
-    case BUILD_RUNNING_PASS: return strip.Color(0, 255 - fade, 0);
-    case BUILD_RUNNING_FAILED: return strip.Color(255 - fade, 0, 0);
+    case BUILD_PASS: return stripColor(0, 255, 0);
+    case BUILD_FAILED: return stripColor(255, 0, 0);
+    case BUILD_RUNNING_PASS: return stripColor(0, 255 - fade, 0);
+    case BUILD_RUNNING_FAILED: return stripColor(255 - fade, 0, 0);
     default: return 0;
   }
 }
@@ -151,12 +155,12 @@ void loop()
 // The colours are a transition r - g - b - back to r.
 uint32_t Wheel(byte WheelPos) {
   if(WheelPos < 85) {
-   return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+   return stripColor(WheelPos * 3, 255 - WheelPos * 3, 0);
   } else if(WheelPos < 170) {
    WheelPos -= 85;
-   return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+   return stripColor(255 - WheelPos * 3, 0, WheelPos * 3);
   } else {
    WheelPos -= 170;
-   return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+   return stripColor(0, WheelPos * 3, 255 - WheelPos * 3);
   }
 }
