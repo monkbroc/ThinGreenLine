@@ -1,0 +1,17 @@
+{
+  "name": "thin_gren_line_cloud",
+  "version": "1.0.0",
+  "description": "",
+  "main": "travis.js",
+  "dependencies": {
+    "dotenv": "^2.0.0",
+    "particle-api-js": "^6.0.6",
+    "request": "^2.75.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
