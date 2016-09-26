@@ -4,7 +4,6 @@ if (!hookio) require('dotenv').config();
 
 var env = hookio ? hook.env : process.env;
 var request = require('request');
-var Particle = require('particle-api-js');
 
 function storeRepos(repos) {
   if (hookio) {
@@ -111,14 +110,32 @@ function encodeAllStates(repos) {
 }
 
 function encodeAndPublish(repos) {
-  storeRepos(repos);
+  return new Promise(function (fulfill, reject) {
+    storeRepos(repos);
 
-  var encoded = encodeAllStates(repos);
+    var encoded = encodeAllStates(repos);
 
-  var token = env.PARTICLE_CI_TOKEN;
-  var device = env.PARTICLE_CI_DEVICE;
-  var particle = new Particle();
-  return particle.callFunction({ deviceId: device, name: 'build', argument: encoded, auth: token }).then(function () {
+    var token = env.PARTICLE_CI_TOKEN;
+    var productId = env.PARTICLE_CI_PRODUCT_ID;
+    var url = 'https://api.particle.io/v1/products/' + productId + '/events';
+    request.post({
+      url: url,
+      form: {
+        name: 'build',
+        data: encoded,
+        private: true
+      },
+      auth: {
+        bearer: token
+      }
+    }, function (error, response, body) {
+      if (error) {
+        reject(error);
+      }
+
+      fulfill(body);
+    });
+  }).then(function () {
     showResults("Published build status for " + repos.length + " repos");
   });
 }

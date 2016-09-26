@@ -3,6 +3,8 @@
 #include "gamma.h"
 
 SYSTEM_MODE(AUTOMATIC);
+PRODUCT_ID(1540);
+PRODUCT_VERSION(2);
 
 uint32_t Wheel(byte WheelPos);
 
@@ -69,7 +71,9 @@ void updateAllPass(unsigned systemCount) {
   allBuildsPass = pass;
 }
 
-int setBuildStatus(String encoded) {
+void setBuildStatus(const char *event, const char *data) {
+  String encoded(data);
+
   unsigned system = 0;
   for (unsigned i = 0; i < encoded.length() && i < PIXEL_COUNT/2; i++, system += 2) {
     uint8_t hex = hex2dec(encoded[i]);
@@ -80,15 +84,12 @@ int setBuildStatus(String encoded) {
     buildStatus[j] = BUILD_NONE;
   }
 
-
   updateAllPass(system);
-
-  return 0;
 }
 
 void setup()
 {
-  Particle.function("build", setBuildStatus);
+  Particle.subscribe("build", setBuildStatus, MY_DEVICES);
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
   strip.show(); // Initialize all pixels to 'off'
