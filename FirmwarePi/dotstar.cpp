@@ -44,12 +44,12 @@
   #define pinLO(_pin) (PIN_MAP2[_pin].gpio_peripheral->BSRRH = PIN_MAP2[_pin].gpio_pin)
   #define pinHI(_pin) (PIN_MAP2[_pin].gpio_peripheral->BSRRL = PIN_MAP2[_pin].gpio_pin)
 #else
-  #define pinLO(_pin) pinSetSlow(_pin, LOW, 5)
-  #define pinHI(_pin) pinSetSlow(_pin, HIGH, 5)
+  #define pinLO(_pin) pinSetSlow(_pin, LOW)
+  #define pinHI(_pin) pinSetSlow(_pin, HIGH)
 
-  void pinSetSlow(int pin, int level, unsigned delay) {
+  void pinSetSlow(int pin, int level) {
     digitalWrite(pin, level);
-    delayMicroseconds(delay);
+    digitalWrite(pin, level);
   }
 
 #endif
