@@ -1,28 +1,30 @@
-var hookio = typeof hook !== 'undefined';
+require('dotenv').config();
 
-if (!hookio) require('dotenv').config();
-
-var env = hookio ? hook.env : process.env;
+var env = process.env;
 var request = require('request');
+var fs = require('fs');
 
-function storeRepos(repos) {
-  if (hookio) {
-    hook.datastore.set('ci_repos', repos);
+function loadRepos() {
+  try {
+    return JSON.parse(fs.readFileSync('repos.json'));
+  } catch (e) {
+    return {};
   }
 }
 
+function storeRepos(repos) {
+  fs.writeFileSync('repos.json', JSON.stringify(repos, true, 2));
+}
+
 function showResults(msg) {
-  if (hookio) {
-    hook.res.end(msg);
-  } else {
-    console.log(msg);
-  }
+  console.log(msg);
 }
 
 function getRepositories(api, token) {
   return new Promise(function (fulfill, reject) {
+    const url = 'https://' + api + '/owner/spark/repos?include=repository.current_build&active=true';
     request({
-      url: 'https://' + api + '/owner/spark/repos?include=repository.current_build&active=true',
+      url: url,
       headers: {
         'Authorization': 'token ' + token,
         'Accept': 'application/vnd.travis-ci.3+json'
@@ -44,9 +46,9 @@ function getRepositories(api, token) {
 function simplifyRepository(repository) {
   var state = repository.current_build && repository.current_build.state;
   return {
-    id: repository.id,
     name: repository.name,
-    state: normalizeState(state)
+    state: normalizeState(state),
+    date: repoDate(repository.name),
   };
 }
 
@@ -72,10 +74,53 @@ function getAllRepos() {
   });
 }
 
-function sortById(repos) {
+function sortByDate(repos) {
   return repos.sort(function (a, b) {
-    return a.id - b.id;
+    return a.date - b.date;
   });
+}
+
+var blacklist = [
+'particle-store',
+'end-to-end-tests',
+'elite-feedback',
+'tutum-udp-proxy',
+'spark-cli',
+'sparkjs',
+'buildpack-0.3.x',
+];
+
+function addIndex(repos) {
+  console.log('addIndex');
+  var index = 0;
+  repos.forEach(function (repo) {
+    if (blacklist.indexOf(repo.name) >= 0) {
+      repo.index = 'none';
+    } else {
+      repo.index = index;
+      index += 1;
+    }
+  });
+  return repos;
+}
+
+function removeDate(repos) {
+  console.log('removeDate');
+  repos.forEach(function (repo) {
+    delete repo.date;
+  });
+  return repos;
+}
+
+function makeReposHash(repos) {
+  console.log('makeReposHash');
+  return repos.reduce(function (hash, repo) {
+    var obj = Object.assign({}, repo);
+    delete obj.name;
+
+    hash[repo.name] = obj;
+    return hash;
+  }, {});
 }
 
 function encodeState(state) {
@@ -140,9 +185,43 @@ function encodeAndPublish(repos) {
   });
 }
 
+var githubRepos = JSON.parse(fs.readFileSync('../../particle_github_repos.json'));
+function repoDate(name) {
+  var repo = githubRepos.find(function (r) {
+    return r.name === name;
+  });
+  if (repo) {
+    return new Date(repo.created_at);
+  } else {
+    return new Date();
+  }
+}
+
+
+
 getAllRepos()
-.then(sortById)
-.then(encodeAndPublish)
-.catch(function (err) {
-  showResults("Error updating build info\n" + err);
+.then(function (newRepos) {
+  var oldRepos = loadRepos();
+  var repos = updateStates(oldRepos, newRepos);
+})
+.then(sortByDate)
+.then(addIndex)
+.then(removeDate)
+.then(makeReposHash)
+.then(function (repos) {
+  console.log('done');
+  storeRepos(repos);
+
+  console.log('id,name,state');
+  Object.keys(repos).forEach(function (name) {
+    var repo = repos[name];
+    console.log(repo.index + ',' + name + ',' + repo.state);
+  });
 });
+
+//getAllRepos()
+//.then(sortById)
+//.then(encodeAndPublish)
+//.catch(function (err) {
+//  showResults("Error updating build info\n" + err);
+//});
