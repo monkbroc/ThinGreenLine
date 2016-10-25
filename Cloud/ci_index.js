@@ -1,59 +1,31 @@
-// Can only be run on hook.io
-if (hook.params.secret !== hook.env.CI_SECRET) {
-  hook.res.end("Provide the secret parameter");
-  return;
+var fs = require('fs');
+
+function loadRepos() {
+  try {
+    return JSON.parse(fs.readFileSync('repos.json'));
+  } catch (e) {
+    return [];
+  }
 }
 
-var id = hook.params.id;
-if (!id) {
-  listAllRepos();
-} else if (id.match(/^\d+$/)) {
-  repoById(id);
-} else {
-  repoByName(id);
+function printField(value, n) {
+  var str = value.toString();
+  if (str.length < n) {
+    str += ' '.repeat(n - str.length);
+  }
+  return str;
 }
 
-function listAllRepos() {
-  loadRepos(function (repos) {
-    hook.res.write("Add an index or name to the URL path for more specific info\n\n");
-
-    var i;
-    for (i = 0; i < repos.length; i++) {
-      var repo = repos[i];
-      hook.res.write(i + ": " + repo.name + "\n");
-    }
-    hook.res.end();
-  });
-}
-
-function repoById(id) {
-  loadRepos(function (repos) {
-    var repo = repos[id];
-    hook.res.end((repo && repo.name) || "Not found");
-  });
-}
-
-function repoByName(name) {
-  loadRepos(function (repos) {
-    var i;
-    for (i = 0; i < repos.length; i++) {
-      var repo = repos[i];
-      if (repo.name === name) {
-        hook.res.end(i);
-        return;
-      }
-    }
-    hook.res.end("Not found");
-  });
-}
-
-function loadRepos(cb) {
-  hook.datastore.get('ci_repos', function (err, repos) {
-    if (err) {
-      hook.res.end("Error");
+function printRepos(repos) {
+  console.log(printField('Index', 8) + printField('Name', 40) + printField('State', 8));
+  repos.forEach(function (repo) {
+    if (repo.index === 'none') {
       return;
     }
-    cb(repos);
+
+    console.log(printField(repo.index, 8) + printField(repo.name, 40) + printField(repo.state, 8));
   });
 }
 
+var repos = loadRepos();
+printRepos(repos);

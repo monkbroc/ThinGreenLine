@@ -8,19 +8,20 @@ function loadRepos() {
   try {
     return JSON.parse(fs.readFileSync('repos.json'));
   } catch (e) {
-    return {};
+    return [];
   }
 }
 
 function storeRepos(repos) {
   fs.writeFileSync('repos.json', JSON.stringify(repos, true, 2));
+  return repos;
 }
 
 function showResults(msg) {
   console.log(msg);
 }
 
-function getRepositories(api, token) {
+function getTravisRepositories(api, token) {
   return new Promise(function (fulfill, reject) {
     const url = 'https://' + api + '/owner/spark/repos?include=repository.current_build&active=true';
     request({
@@ -48,7 +49,6 @@ function simplifyRepository(repository) {
   return {
     name: repository.name,
     state: normalizeState(state),
-    date: repoDate(repository.name),
   };
 }
 
@@ -63,10 +63,10 @@ function normalizeState(state) {
   }
 }
 
-function getAllRepos() {
+function getAllTravisRepos() {
   return Promise.all([
-      getRepositories('api.travis-ci.org', env.TRAVIS_ORG_TOKEN),
-      getRepositories('api.travis-ci.com', env.TRAVIS_COM_TOKEN)
+      getTravisRepositories('api.travis-ci.org', env.TRAVIS_ORG_TOKEN),
+      getTravisRepositories('api.travis-ci.com', env.TRAVIS_COM_TOKEN)
   ]).then(function (results) {
     var publicRepos = results[0];
     var privateRepos = results[1];
@@ -74,53 +74,54 @@ function getAllRepos() {
   });
 }
 
-function sortByDate(repos) {
-  return repos.sort(function (a, b) {
-    return a.date - b.date;
-  });
+function getNextIndex(repos) {
+  return repos.reduce(function (index, repo) {
+    return Math.max(index, repo.index === 'none' ? index : repo.index);
+  }, 0) + 1;
 }
 
-var blacklist = [
-'particle-store',
-'end-to-end-tests',
-'elite-feedback',
-'tutum-udp-proxy',
-'spark-cli',
-'sparkjs',
-'buildpack-0.3.x',
-];
+function updateRepoInList(repos, repo) {
+  var i = repos.findIndex(function (r) {
+    return r.name === repo.name;
+  });
+  if (i >= 0) {
+    repos[i] = repo;
+  } else {
+    repos.push(repo);
+  }
+  return repos;
+}
 
-function addIndex(repos) {
-  console.log('addIndex');
-  var index = 0;
-  repos.forEach(function (repo) {
-    if (blacklist.indexOf(repo.name) >= 0) {
-      repo.index = 'none';
+function updateRepoStates(repos, newRepos) {
+  newRepos.forEach(function (newRepo) {
+    var repo = repoByName(repos, newRepo.name);
+    if (repo) {
+      repo.state = newRepo.state;
     } else {
-      repo.index = index;
-      index += 1;
+      repo = Object.assign({}, newRepo, { index: getNextIndex(repos) });
     }
+    repos = updateRepoInList(repos, repo);
   });
+
   return repos;
 }
 
-function removeDate(repos) {
-  console.log('removeDate');
-  repos.forEach(function (repo) {
-    delete repo.date;
+function repoByName(repos, name) {
+  return repos.find(function (repo) {
+    return repo.name === name;
   });
-  return repos;
 }
 
-function makeReposHash(repos) {
-  console.log('makeReposHash');
-  return repos.reduce(function (hash, repo) {
-    var obj = Object.assign({}, repo);
-    delete obj.name;
+function repoByIndex(repos, index) {
+  return repos.find(function (repo) {
+    return repo.index === index;
+  });
+}
 
-    hash[repo.name] = obj;
-    return hash;
-  }, {});
+function countActiveRepos(repos) {
+  return repos.reduce(function (sum, repo) {
+    return sum + (repo.index === 'none' ? 0 : 1);
+  }, 0);
 }
 
 function encodeState(state) {
@@ -141,8 +142,9 @@ function encodeAllStates(repos) {
   // high nibble and the second in the low nibble
   var encoded = [];
   var i;
-  for (i = 0; i < repos.length; i++) {
-    var repo = repos[i];
+  var count = Object.keys(repos).length;
+  for (i = 0; i < count; i++) {
+    var repo = repoByIndex(repos, i) || {};
     var s = encodeState(repo.state);
     if (i % 2 == 0) {
       encoded.push(s << 2);
@@ -156,10 +158,9 @@ function encodeAllStates(repos) {
 
 function encodeAndPublish(repos) {
   return new Promise(function (fulfill, reject) {
-    storeRepos(repos);
-
     var encoded = encodeAllStates(repos);
 
+    showResults('Sending build status ' + encoded);
     var token = env.PARTICLE_CI_TOKEN;
     var productId = env.PARTICLE_CI_PRODUCT_ID;
     var url = 'https://api.particle.io/v1/products/' + productId + '/events';
@@ -181,7 +182,7 @@ function encodeAndPublish(repos) {
       fulfill(body);
     });
   }).then(function () {
-    showResults("Published build status for " + repos.length + " repos");
+    showResults("Published build status for " + countActiveRepos(repos) + " repos");
   });
 }
 
@@ -199,29 +200,15 @@ function repoDate(name) {
 
 
 
-getAllRepos()
+getAllTravisRepos()
 .then(function (newRepos) {
   var oldRepos = loadRepos();
-  var repos = updateStates(oldRepos, newRepos);
+  return updateRepoStates(oldRepos, newRepos);
 })
-.then(sortByDate)
-.then(addIndex)
-.then(removeDate)
-.then(makeReposHash)
-.then(function (repos) {
-  console.log('done');
-  storeRepos(repos);
-
-  console.log('id,name,state');
-  Object.keys(repos).forEach(function (name) {
-    var repo = repos[name];
-    console.log(repo.index + ',' + name + ',' + repo.state);
-  });
+.then(storeRepos)
+.then(encodeAndPublish)
+.catch(function (err) {
+  console.error("Error updating build info", err);
+  console.error(err.stack);
 });
 
-//getAllRepos()
-//.then(sortById)
-//.then(encodeAndPublish)
-//.catch(function (err) {
-//  showResults("Error updating build info\n" + err);
-//});
