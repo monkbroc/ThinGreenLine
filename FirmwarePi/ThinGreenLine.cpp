@@ -7,7 +7,7 @@ SYSTEM_MODE(AUTOMATIC);
 //PRODUCT_ID(1540);
 //PRODUCT_VERSION(2);
 
-// IMPORTANT: Set pixel COUNT, PIN and TYPE
+// Use software SPI pins for Dotstar
 #define PIXEL_DATA_PIN 24
 #define PIXEL_CLK_PIN 23
 #define PIXEL_COUNT 144
@@ -88,9 +88,15 @@ void setBuildStatus(const char *event, const char *data) {
   updateAllPass(system);
 }
 
+int forceRainbow(String) {
+  allBuildsPass = true;
+  return 0;
+}
+
 void setup()
 {
   Particle.subscribe("build", setBuildStatus, MY_DEVICES);
+  Particle.function("rainbow", forceRainbow);
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
   strip.show(); // Initialize all pixels to 'off'
@@ -114,12 +120,12 @@ uint32_t stripColor(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 uint32_t colorForBuildStatus(unsigned i, BuildStatus_e st) {
-  if (st == BUILD_NONE) {
-    return 0;
-  }
-
   if (ENABLE_RAINBOW && allBuildsPass) {
     return colorForRainbow(i);
+  }
+
+  if (st == BUILD_NONE) {
+    return 0;
   }
 
   switch (st) {

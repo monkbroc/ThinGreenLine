@@ -186,20 +186,6 @@ function encodeAndPublish(repos) {
   });
 }
 
-var githubRepos = JSON.parse(fs.readFileSync('../../particle_github_repos.json'));
-function repoDate(name) {
-  var repo = githubRepos.find(function (r) {
-    return r.name === name;
-  });
-  if (repo) {
-    return new Date(repo.created_at);
-  } else {
-    return new Date();
-  }
-}
-
-
-
 getAllTravisRepos()
 .then(function (newRepos) {
   var oldRepos = loadRepos();

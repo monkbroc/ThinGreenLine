@@ -1,22 +1,21 @@
 #include "application.h"
-#include "neopixel.h"
+#include "dotstar.h"
 #include "gamma.h"
+#include "hsv.h"
 
 SYSTEM_MODE(AUTOMATIC);
 PRODUCT_ID(1540);
-PRODUCT_VERSION(2);
+PRODUCT_VERSION(6);
 
-uint32_t Wheel(byte WheelPos);
-
-// IMPORTANT: Set pixel COUNT, PIN and TYPE
-#define PIXEL_PIN D0
+// Use hardware SPI for Dotstar (A3 and A5)
 #define PIXEL_COUNT 144
-#define PIXEL_TYPE WS2812B
 
-#define BRIGHTNESS 40
+#define BRIGHTNESS 10
 #define ENABLE_RAINBOW 1
+#define RAINBOW_SPACING 10
+#define RAINBOW_SPEED 1
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIXEL_PIN, PIXEL_TYPE);
+Adafruit_DotStar strip = Adafruit_DotStar(PIXEL_COUNT, DOTSTAR_BGR);
 
 enum BuildStatus_e {
   BUILD_NONE = 0,
@@ -31,7 +30,7 @@ BuildStatus_e buildStatus[PIXEL_COUNT];
 
 bool allBuildsPass = false;
 
-uint8_t hex2dec(char c) {
+static uint8_t hex2dec(char c) {
     if (c >= '0' && c <= '9')
         return c - '0';
     if (c >= 'a' && c <= 'f')
@@ -87,9 +86,15 @@ void setBuildStatus(const char *event, const char *data) {
   updateAllPass(system);
 }
 
+int forceRainbow(String) {
+  allBuildsPass = true;
+  return 0;
+}
+
 void setup()
 {
   Particle.subscribe("build", setBuildStatus, MY_DEVICES);
+  Particle.function("rainbow", forceRainbow);
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
   strip.show(); // Initialize all pixels to 'off'
@@ -99,9 +104,13 @@ uint16_t rainbow = 0;
 uint8_t fade = 0;
 int8_t fadeDirection = 1;
 
-
 uint32_t colorForRainbow(unsigned i) {
-  return Wheel((uint8_t) (i + rainbow >> 2));
+  HsvColor hsv;
+  hsv.h = (uint8_t)(RAINBOW_SPEED * rainbow - RAINBOW_SPACING * i);
+  hsv.s = 255;
+  hsv.v = 255;
+  RgbColor rgb = HsvToRgb(hsv);
+  return (uint32_t)(rgb.r << 16) | (uint32_t)(rgb.g << 8) | (uint32_t)(rgb.b);
 }
 
 uint32_t stripColor(uint8_t r, uint8_t g, uint8_t b) {
@@ -109,12 +118,12 @@ uint32_t stripColor(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 uint32_t colorForBuildStatus(unsigned i, BuildStatus_e st) {
-  if (st == BUILD_NONE) {
-    return 0;
-  }
-
   if (ENABLE_RAINBOW && allBuildsPass) {
     return colorForRainbow(i);
+  }
+
+  if (st == BUILD_NONE) {
+    return 0;
   }
 
   switch (st) {
@@ -149,19 +158,5 @@ void loop()
   showBuildStatus();
   updateFade();
   updateRainbow();
-  delay(5);
-}
-
-// Input a value 0 to 255 to get a color value.
-// The colours are a transition r - g - b - back to r.
-uint32_t Wheel(byte WheelPos) {
-  if(WheelPos < 85) {
-   return stripColor(WheelPos * 3, 255 - WheelPos * 3, 0);
-  } else if(WheelPos < 170) {
-   WheelPos -= 85;
-   return stripColor(255 - WheelPos * 3, 0, WheelPos * 3);
-  } else {
-   WheelPos -= 170;
-   return stripColor(0, WheelPos * 3, 255 - WheelPos * 3);
-  }
+  delay(2);
 }
