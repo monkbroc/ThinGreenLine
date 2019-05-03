@@ -1,13 +1,13 @@
 #include "application.h"
-#include "dotstar.h"
-#include "gamma.h"
-#include "hsv.h"
+#include "lib/dotstar.h"
+#include "lib/gamma.h"
+#include "lib/hsv.h"
 
 SYSTEM_MODE(AUTOMATIC);
 
 #if PLATFORM_ID == 6 // Photon
 PRODUCT_ID(1540);
-PRODUCT_VERSION(9);
+PRODUCT_VERSION(10);
 SYSTEM_THREAD(ENABLED);
 #else
 // No product ID for Raspberry Pi
@@ -51,6 +51,7 @@ static uint8_t hex2dec(char c);
 void updateBuildStatus(unsigned system, uint8_t encodedStatus);
 void updateSystemCount();
 void updateAllPass();
+int setBrightness(String newValueString);
 int forceRainbow(String);
 void showBuildStatus();
 uint32_t colorForBuildStatus(unsigned i, BuildStatus_e st);
@@ -63,6 +64,7 @@ void setup()
 {
   Particle.subscribe("build", setBuildStatus, MY_DEVICES);
   Particle.function("rainbow", forceRainbow);
+  Particle.function("brightness", setBrightness);
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
   strip.show(); // Initialize all pixels to 'off'
@@ -156,6 +158,12 @@ void updateAllPass() {
   }
 
   allBuildsPass = pass;
+}
+
+int setBrightness(String newValueString) {
+  int newValue = newValueString.toInt();
+  strip.setBrightness(newValue);
+  return newValue;
 }
 
 int forceRainbow(String) {
